@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
+import { Analytics } from '@vercel/analytics/react';
 import './globals.css';
 import { NavBar } from '@/components/navigation/NavBar';
 
@@ -40,6 +41,7 @@ export default function RootLayout({
           {children}
         </main>
         <NavBar />
+        <Analytics />
       </body>
     </html>
   );
