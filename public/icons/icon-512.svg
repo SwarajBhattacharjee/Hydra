@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="waterGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#075985" />
+    </linearGradient>
+    <linearGradient id="shineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="#0c4a6e" />
+  <path d="M256 64 C256 64, 112 256, 112 352 C112 431.5 176.5 496 256 496 C335.5 496 400 431.5 400 352 C400 256, 256 64, 256 64 Z" fill="url(#waterGrad)" />
+  <path d="M256 110 C256 110, 150 250, 150 330 C150 370 175 410 210 430 C190 400 190 350 220 280 C240 230 256 110 256 110 Z" fill="url(#shineGrad)" />
+  <!-- Cute Eyes -->
+  <circle cx="216" cy="330" r="16" fill="#0f172a" />
+  <circle cx="296" cy="330" r="16" fill="#0f172a" />
+  <circle cx="222" cy="324" r="6" fill="#ffffff" />
+  <circle cx="302" cy="324" r="6" fill="#ffffff" />
+  <!-- Cute Smile -->
+  <path d="M226 366 Q256 390 286 366" fill="none" stroke="#0f172a" stroke-width="8" stroke-linecap="round" />
+  <!-- Cheeks -->
+  <ellipse cx="190" cy="346" rx="14" ry="8" fill="#f43f5e" opacity="0.5" />
+  <ellipse cx="322" cy="346" rx="14" ry="8" fill="#f43f5e" opacity="0.5" />
+</svg>
