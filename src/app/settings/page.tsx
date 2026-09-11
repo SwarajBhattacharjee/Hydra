@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Target, Clock, Volume2, Users, Bell, Trash2, CheckCircle2, Send } from 'lucide-react';
+import { User, Target, Clock, Volume2, Users, Bell, Trash2, CheckCircle2, Send, Mail, Phone, ShieldCheck } from 'lucide-react';
 import { HydrationStore } from '@/lib/hydrationStore';
-import { UserProfile, Personality } from '@/lib/types';
+import { UserProfile, Personality, NotificationChannel } from '@/lib/types';
 import { sendLocalNotification, requestNotificationPermission, detectPlatformCapabilities } from '@/lib/webPush';
 
 export default function SettingsPage() {
@@ -12,6 +12,7 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [testSent, setTestSent] = useState(false);
+  const [testLog, setTestLog] = useState<string | null>(null);
 
   useEffect(() => {
     setProfile(HydrationStore.getProfile());
@@ -27,22 +28,45 @@ export default function SettingsPage() {
   };
 
   const handleTestNotification = async () => {
+    setTestSent(true);
+    setTestLog('Dispatching test notification...');
+
+    const title = 'Hydra Hydration Check! 💧';
+    const body = `Hey ${profile.name}! Time for a glass of water. ${profile.friendName ? `(${profile.friendName} is watching)` : ''}`;
+
+    // Also trigger browser push if enabled/supported
     const caps = detectPlatformCapabilities();
-    if (caps.permissionState !== 'granted') {
-      const perm = await requestNotificationPermission();
-      if (perm !== 'granted') {
-        alert("Please enable notification permissions first!");
-        return;
-      }
+    if (caps.permissionState === 'granted') {
+      sendLocalNotification(title, { body, tag: 'test-reminder' });
     }
 
-    await sendLocalNotification("Hydra Hydration Check! 💧", {
-      body: `Hey ${profile.name}! Time for a glass of water. ${profile.friendName ? `(${profile.friendName} is watching)` : ''}`,
-      tag: 'test-reminder'
-    });
+    try {
+      const res = await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'test',
+          channel: profile.notificationChannel || 'all',
+          email: profile.email,
+          phone: profile.phone,
+          payload: { title, body }
+        })
+      });
 
-    setTestSent(true);
-    setTimeout(() => setTestSent(false), 3000);
+      const data = await res.json();
+      if (data.success) {
+        const channels = data.channelsDispatched.join(', ') || 'browser';
+        setTestLog(`Test sent successfully via [${channels}]! Check your inbox / phone / logs.`);
+      } else {
+        setTestLog(`Notification warning: ${data.error || 'Check channel details'}`);
+      }
+    } catch (err: unknown) {
+      setTestLog(`Test notification dispatched locally.`);
+    }
+
+    setTimeout(() => {
+      setTestSent(false);
+    }, 4000);
   };
 
   const handleResetData = () => {
@@ -62,7 +86,7 @@ export default function SettingsPage() {
       </div>
 
       <form onSubmit={handleSave} className="w-full max-w-md space-y-4">
-        {/* Name Card */}
+        {/* Display Name Card */}
         <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-3">
           <div className="flex items-center gap-2.5 text-white font-bold text-sm">
             <User className="w-4 h-4 text-sky-400" />
@@ -74,6 +98,87 @@ export default function SettingsPage() {
             onChange={(e) => setProfile({ ...profile, name: e.target.value })}
             className="w-full py-2.5 px-4 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm font-semibold focus:outline-none focus:border-sky-400"
           />
+        </div>
+
+        {/* NOTIFICATION DESTINATIONS & CHANNELS CARD */}
+        <div className="bg-slate-900/90 border border-sky-500/30 rounded-3xl p-5 space-y-4 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5 text-white font-bold text-sm">
+              <Bell className="w-4 h-4 text-sky-400" />
+              <span>Hydration Reminder System</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setProfile({ ...profile, notificationsEnabled: !profile.notificationsEnabled })}
+              className={`py-1 px-3 rounded-full text-xs font-bold transition border ${
+                profile.notificationsEnabled
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+              }`}
+            >
+              {profile.notificationsEnabled ? 'Active 🔔' : 'Disabled 🔕'}
+            </button>
+          </div>
+
+          <p className="text-xs text-slate-300 leading-relaxed">
+            Receive hydration alerts directly via <strong>Mail</strong>, <strong>SMS Phone Number</strong>, or <strong>Browser Push</strong>.
+          </p>
+
+          {/* Preferred Channel Selection */}
+          <div className="space-y-2 pt-1">
+            <label className="text-xs text-slate-400 font-semibold block">Notification Channel:</label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: 'all', label: 'All Channels ⚡' },
+                { id: 'email', label: 'Email Only 📧' },
+                { id: 'phone', label: 'Phone SMS 📱' },
+                { id: 'push', label: 'Browser Push 🔔' }
+              ].map((ch) => (
+                <button
+                  type="button"
+                  key={ch.id}
+                  onClick={() => setProfile({ ...profile, notificationChannel: ch.id as NotificationChannel })}
+                  className={`py-2 px-3 rounded-xl font-bold text-xs border transition ${
+                    (profile.notificationChannel || 'all') === ch.id
+                      ? 'bg-sky-500 text-white border-sky-300 shadow-md'
+                      : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  {ch.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Email Input Field */}
+          <div className="space-y-1.5 pt-2 border-t border-slate-800">
+            <label className="text-xs text-slate-300 font-bold flex items-center gap-1.5">
+              <Mail className="w-3.5 h-3.5 text-sky-400" />
+              <span>Email Address (for Email Reminders)</span>
+            </label>
+            <input
+              type="email"
+              placeholder="e.g. yourname@gmail.com"
+              value={profile.email || ''}
+              onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+              className="w-full py-2.5 px-4 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm font-semibold focus:outline-none focus:border-sky-400 placeholder-slate-600"
+            />
+          </div>
+
+          {/* Phone Number Input Field */}
+          <div className="space-y-1.5 pt-1">
+            <label className="text-xs text-slate-300 font-bold flex items-center gap-1.5">
+              <Phone className="w-3.5 h-3.5 text-sky-400" />
+              <span>Phone Number (for SMS Reminders)</span>
+            </label>
+            <input
+              type="tel"
+              placeholder="e.g. +1234567890"
+              value={profile.phone || ''}
+              onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+              className="w-full py-2.5 px-4 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm font-semibold focus:outline-none focus:border-sky-400 placeholder-slate-600"
+            />
+          </div>
         </div>
 
         {/* Daily Goal Card */}
@@ -200,19 +305,28 @@ export default function SettingsPage() {
         </div>
 
         {/* Test Notification Action */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
-            <Bell className="w-4 h-4 text-sky-400" />
-            <span>Test Notification</span>
+        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+              <Bell className="w-4 h-4 text-sky-400" />
+              <span>Test Multi-Channel Delivery</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleTestNotification}
+              disabled={testSent}
+              className="py-2 px-3 bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>{testSent ? 'Sending...' : 'Send Test Notification 🚀'}</span>
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={handleTestNotification}
-            className="py-2 px-3 bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>{testSent ? 'Sent! 🚀' : 'Send Test'}</span>
-          </button>
+
+          {testLog && (
+            <p className="text-[11px] text-sky-300 bg-slate-950 p-2.5 rounded-xl border border-sky-500/30">
+              {testLog}
+            </p>
+          )}
         </div>
 
         {/* Save Button */}

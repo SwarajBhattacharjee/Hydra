@@ -23,6 +23,9 @@ export default function OnboardingPage() {
   const [sleepTime, setSleepTime] = useState('22:00');
   const [personality, setPersonality] = useState<Personality>('friendly');
   const [notifGranted, setNotifGranted] = useState(false);
+  const [notificationChannel, setNotificationChannel] = useState<'all' | 'email' | 'phone' | 'push'>('all');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
 
   const totalSteps = 6;
 
@@ -33,11 +36,11 @@ export default function OnboardingPage() {
 
   const handleRequestNotif = async () => {
     const perm = await requestNotificationPermission();
-    setNotifGranted(perm === 'granted');
-    handleFinish();
+    setNotifGranted(perm === 'granted' || !!email || !!phone);
+    handleFinish(perm === 'granted' || !!email || !!phone);
   };
 
-  const handleFinish = () => {
+  const handleFinish = (enableNotifs: boolean = true) => {
     const finalGoal = isCustomGoal ? parseInt(customGoalInput, 10) || 2500 : dailyGoalMl;
     const profile = {
       ...DEFAULT_PROFILE,
@@ -47,7 +50,10 @@ export default function OnboardingPage() {
       wakeTime,
       sleepTime,
       personality,
-      notificationsEnabled: notifGranted,
+      notificationsEnabled: enableNotifs,
+      notificationChannel,
+      email: email.trim(),
+      phone: phone.trim(),
       updatedAt: new Date().toISOString()
     };
 
@@ -401,47 +407,67 @@ export default function OnboardingPage() {
             </motion.div>
           )}
 
-          {/* STEP 5: Notification Permission Prompt */}
+          {/* STEP 5: Notification Settings & Destinations */}
           {step === 5 && (
             <motion.div
               key="step5"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="flex flex-col items-center text-center space-y-5 w-full"
+              className="flex flex-col items-center text-center space-y-4 w-full"
             >
-              <HydroMascot percentage={100} customMessage="Ready to get hydrated!" size="md" />
+              <HydroMascot percentage={100} customMessage="Ready to get hydrated!" size="sm" />
 
-              <div className="bg-slate-900/90 p-5 border border-sky-500/30 rounded-3xl space-y-3 text-left w-full">
+              <div className="bg-slate-900/90 p-4 border border-sky-500/30 rounded-3xl space-y-3 text-left w-full">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 bg-sky-500/20 text-sky-400 rounded-xl">
-                    <Bell className="w-6 h-6" />
+                    <Bell className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-white text-base">Enable Reminders</h3>
-                    <p className="text-xs text-sky-300">Allow push notifications</p>
+                    <h3 className="font-bold text-white text-sm">Where should Hydra nudge you?</h3>
+                    <p className="text-xs text-sky-300">Set up Email, SMS or Push</p>
                   </div>
                 </div>
 
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Hydra needs permission to alert you during your active hours. I'll try to remind you gently — keep the app installed for best results!
-                </p>
+                <div className="space-y-2 pt-1">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Email (for Mail Reminders)</label>
+                    <input
+                      type="email"
+                      placeholder="e.g. user@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full py-2 px-3 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-sky-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">Phone Number (for SMS Reminders)</label>
+                    <input
+                      type="tel"
+                      placeholder="e.g. +1234567890"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full py-2 px-3 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-sky-400"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-3 w-full pt-2">
+              <div className="space-y-2 w-full pt-1">
                 <button
                   onClick={handleRequestNotif}
-                  className="w-full py-4 bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 text-white font-extrabold text-base rounded-2xl shadow-[0_8px_25px_rgba(2,132,199,0.5)] transition flex items-center justify-center gap-2 active:scale-95"
+                  className="w-full py-3.5 bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 text-white font-extrabold text-sm rounded-2xl shadow-[0_8px_25px_rgba(2,132,199,0.5)] transition flex items-center justify-center gap-2 active:scale-95"
                 >
-                  <Bell className="w-5 h-5" />
-                  <span>Enable Notifications & Start 🚀</span>
+                  <Bell className="w-4 h-4" />
+                  <span>Enable Reminders & Launch 🚀</span>
                 </button>
 
                 <button
-                  onClick={handleFinish}
-                  className="w-full py-3 text-slate-400 font-semibold text-xs hover:text-white transition"
+                  onClick={() => handleFinish(false)}
+                  className="w-full py-2 text-slate-400 font-semibold text-xs hover:text-white transition"
                 >
-                  Skip for now (use dashboard without push)
+                  Skip for now
                 </button>
               </div>
             </motion.div>

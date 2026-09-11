@@ -1,9 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, BellOff, Share, PlusSquare, Smartphone, CheckCircle, Info } from 'lucide-react';
+import { Bell, BellOff, Share, PlusSquare, Smartphone, CheckCircle, Info, Mail, Phone, Settings } from 'lucide-react';
 import { detectPlatformCapabilities, requestNotificationPermission, PlatformCapabilities } from '@/lib/webPush';
+import { HydrationStore } from '@/lib/hydrationStore';
+import { UserProfile } from '@/lib/types';
 
 interface PushNotificationPromptProps {
   onPermissionChange?: (enabled: boolean) => void;
@@ -11,15 +14,17 @@ interface PushNotificationPromptProps {
 
 export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({ onPermissionChange }) => {
   const [caps, setCaps] = useState<PlatformCapabilities | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [showIOSModal, setShowIOSModal] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const detected = detectPlatformCapabilities();
     setCaps(detected);
+    setProfile(HydrationStore.getProfile());
   }, []);
 
-  if (!caps) return null;
+  if (!caps || !profile) return null;
 
   const handleEnableClick = async () => {
     if (caps.needsIOSHomeInstall) {
@@ -34,10 +39,20 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({ 
     const updatedCaps = detectPlatformCapabilities();
     setCaps(updatedCaps);
 
+    if (permission === 'granted') {
+      const p = { ...profile, notificationsEnabled: true };
+      HydrationStore.saveProfile(p);
+      setProfile(p);
+    }
+
     if (onPermissionChange) {
       onPermissionChange(permission === 'granted');
     }
   };
+
+  const hasEmail = Boolean(profile.email);
+  const hasPhone = Boolean(profile.phone);
+  const activeChannel = profile.notificationChannel || 'all';
 
   return (
     <div className="w-full max-w-md my-4 px-4 select-none">
@@ -45,45 +60,50 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({ 
       <div className="bg-slate-900/90 border border-sky-500/30 rounded-2xl p-4 backdrop-blur-md shadow-lg flex flex-col gap-3">
         <div className="flex items-start gap-3">
           <div className="p-2.5 bg-sky-500/20 text-sky-400 rounded-xl shrink-0 mt-0.5">
-            {caps.permissionState === 'granted' ? (
-              <Bell className="w-5 h-5" />
-            ) : caps.permissionState === 'denied' ? (
-              <BellOff className="w-5 h-5 text-rose-400" />
+            {profile.notificationsEnabled ? (
+              <Bell className="w-5 h-5 text-sky-400" />
             ) : (
-              <Bell className="w-5 h-5 animate-pulse" />
+              <BellOff className="w-5 h-5 text-slate-500" />
             )}
           </div>
 
-          <div className="flex-1 text-left">
-            <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-              <span>Smart Hydration Reminders</span>
-              {caps.permissionState === 'granted' && (
-                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/40">
-                  Active
-                </span>
-              )}
-            </h4>
+          <div className="flex-1 text-left space-y-1">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                <span>Multi-Channel Reminders</span>
+                {profile.notificationsEnabled && (
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/40">
+                    Active 🔔
+                  </span>
+                )}
+              </h4>
+              <Link href="/settings" className="text-sky-400 hover:text-sky-300 text-xs font-bold flex items-center gap-1">
+                <Settings className="w-3.5 h-3.5" />
+                <span>Configure</span>
+              </Link>
+            </div>
             
-            <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-              {caps.permissionState === 'granted' ? (
-                "I'll try to remind you during your active hours — keep the app installed for best results."
-              ) : caps.permissionState === 'denied' ? (
-                "Notifications are blocked in your browser settings. You can still use the app freely!"
-              ) : caps.needsIOSHomeInstall ? (
-                "On iPhones, iOS requires adding Hydra to your Home Screen first before enabling notifications."
+            <p className="text-xs text-slate-300 leading-relaxed">
+              {profile.notificationsEnabled ? (
+                <>
+                  Nudges delivered via <strong>{activeChannel.toUpperCase()}</strong>:
+                  {hasEmail && <span className="block text-[11px] text-sky-300">📧 Mail: {profile.email}</span>}
+                  {hasPhone && <span className="block text-[11px] text-sky-300">📱 Phone SMS: {profile.phone}</span>}
+                  {!hasEmail && !hasPhone && <span className="block text-[11px] text-slate-400">Add Mail or Phone in Settings for direct SMS/Email delivery!</span>}
+                </>
               ) : (
-                "Get gentle (and funny) hydration nudges right on your lock screen!"
+                "Never miss hydration! Set up Email, Phone SMS, or Web Push reminders."
               )}
             </p>
           </div>
         </div>
 
         {/* Action Button */}
-        {caps.permissionState !== 'granted' && caps.permissionState !== 'denied' && (
+        {!profile.notificationsEnabled && (
           <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-3">
             <span className="text-[11px] text-slate-400 flex items-center gap-1">
               <Info className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-              No spam guarantee
+              Mail & SMS supported
             </span>
 
             <button
@@ -91,7 +111,7 @@ export const PushNotificationPrompt: React.FC<PushNotificationPromptProps> = ({ 
               disabled={loading}
               className="py-2 px-4 bg-sky-500 hover:bg-sky-400 text-white text-xs font-extrabold rounded-xl shadow-md transition active:scale-95 disabled:opacity-50"
             >
-              {loading ? 'Enabling...' : caps.needsIOSHomeInstall ? 'iOS Setup Instructions 📱' : 'Enable Reminders 🔔'}
+              {loading ? 'Enabling...' : caps.needsIOSHomeInstall ? 'iOS Instructions 📱' : 'Enable Reminders 🔔'}
             </button>
           </div>
         )}

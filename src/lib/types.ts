@@ -2,6 +2,8 @@ export type Personality = 'friendly' | 'motivational' | 'chaotic' | 'passive-agg
 
 export type MascotMood = 'worried' | 'flat' | 'pleased' | 'excited' | 'thrilled' | 'streak';
 
+export type NotificationChannel = 'push' | 'email' | 'phone' | 'all';
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -12,6 +14,9 @@ export interface UserProfile {
   personality: Personality;
   friendName?: string;
   notificationsEnabled: boolean;
+  notificationChannel?: NotificationChannel;
+  email?: string;
+  phone?: string;
   createdAt: string;
   updatedAt: string;
 }

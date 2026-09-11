@@ -16,6 +16,9 @@ export const DEFAULT_PROFILE: UserProfile = {
   personality: 'friendly',
   friendName: '',
   notificationsEnabled: false,
+  notificationChannel: 'all',
+  email: '',
+  phone: '',
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -91,6 +94,9 @@ export class HydrationStore {
         personality: profile.personality,
         friend_name: profile.friendName,
         notifications_enabled: profile.notificationsEnabled,
+        notification_channel: profile.notificationChannel,
+        email: profile.email,
+        phone: profile.phone,
         updated_at: profile.updatedAt
       }).then();
     }

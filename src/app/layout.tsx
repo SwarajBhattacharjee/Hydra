@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/react';
 import './globals.css';
 import { NavBar } from '@/components/navigation/NavBar';
+import { ReminderScheduler } from '@/components/notifications/ReminderScheduler';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
@@ -37,6 +38,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} dark`}>
       <body className="font-sans antialiased pb-20">
+        <ReminderScheduler />
         <main className="min-h-screen max-w-lg mx-auto flex flex-col items-center justify-start p-4">
           {children}
         </main>
