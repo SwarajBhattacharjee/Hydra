@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Target, Clock, Volume2, Users, Bell, Trash2, CheckCircle2, Send, Mail, Phone, ShieldCheck } from 'lucide-react';
+import { User, Target, Clock, Volume2, Users, Bell, Trash2, CheckCircle2, Send, Mail, Phone, AlertCircle } from 'lucide-react';
 import { HydrationStore } from '@/lib/hydrationStore';
 import { UserProfile, Personality, NotificationChannel } from '@/lib/types';
 import { sendLocalNotification, requestNotificationPermission, detectPlatformCapabilities } from '@/lib/webPush';
@@ -28,13 +28,21 @@ export default function SettingsPage() {
   };
 
   const handleTestNotification = async () => {
+    // 1. Auto-save current profile settings first
+    HydrationStore.saveProfile(profile);
+
+    if (!profile.email && !profile.phone && profile.notificationChannel !== 'push') {
+      alert("Please enter your Email address or Phone number below first!");
+      return;
+    }
+
     setTestSent(true);
     setTestLog('Dispatching test notification...');
 
     const title = 'Hydra Hydration Check! 💧';
     const body = `Hey ${profile.name}! Time for a glass of water. ${profile.friendName ? `(${profile.friendName} is watching)` : ''}`;
 
-    // Also trigger browser push if enabled/supported
+    // Also trigger local browser push notification if permission is granted
     const caps = detectPlatformCapabilities();
     if (caps.permissionState === 'granted') {
       sendLocalNotification(title, { body, tag: 'test-reminder' });
@@ -54,19 +62,44 @@ export default function SettingsPage() {
       });
 
       const data = await res.json();
-      if (data.success) {
-        const channels = data.channelsDispatched.join(', ') || 'browser';
-        setTestLog(`Test sent successfully via [${channels}]! Check your inbox / phone / logs.`);
+      if (data.success && data.results) {
+        const logLines: string[] = [];
+
+        if (data.results.email) {
+          if (data.results.email.status === 'delivered') {
+            logLines.push(`✅ Email (${data.results.email.provider}): Sent to ${profile.email}`);
+          } else {
+            logLines.push(`❌ Email Failed: ${data.results.email.error}`);
+          }
+        }
+
+        if (data.results.phone) {
+          if (data.results.phone.status === 'delivered') {
+            logLines.push(`✅ SMS (${data.results.phone.provider}): Sent to ${profile.phone}`);
+          } else {
+            logLines.push(`❌ SMS Failed: ${data.results.phone.error}`);
+          }
+        }
+
+        if (caps.permissionState === 'granted') {
+          logLines.push(`✅ Browser Push: Displayed on device`);
+        }
+
+        if (logLines.length === 0) {
+          logLines.push(`ℹ️ Enter your Email or Phone below to send notifications.`);
+        }
+
+        setTestLog(logLines.join(' | '));
       } else {
-        setTestLog(`Notification warning: ${data.error || 'Check channel details'}`);
+        setTestLog(`Notification error: ${data.error || 'Check configuration'}`);
       }
     } catch (err: unknown) {
-      setTestLog(`Test notification dispatched locally.`);
+      setTestLog(`Notification error: ${err instanceof Error ? err.message : 'Dispatch failed'}`);
     }
 
     setTimeout(() => {
       setTestSent(false);
-    }, 4000);
+    }, 6000);
   };
 
   const handleResetData = () => {
@@ -154,7 +187,7 @@ export default function SettingsPage() {
           <div className="space-y-1.5 pt-2 border-t border-slate-800">
             <label className="text-xs text-slate-300 font-bold flex items-center gap-1.5">
               <Mail className="w-3.5 h-3.5 text-sky-400" />
-              <span>Email Address (for Email Reminders)</span>
+              <span>Email Address (for Mail Reminders)</span>
             </label>
             <input
               type="email"
@@ -323,9 +356,13 @@ export default function SettingsPage() {
           </div>
 
           {testLog && (
-            <p className="text-[11px] text-sky-300 bg-slate-950 p-2.5 rounded-xl border border-sky-500/30">
-              {testLog}
-            </p>
+            <div className="text-xs text-sky-200 bg-slate-950 p-3 rounded-xl border border-sky-500/30 font-medium space-y-1">
+              {testLog.split(' | ').map((line, idx) => (
+                <div key={idx} className="flex items-start gap-1.5">
+                  <span>{line}</span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 

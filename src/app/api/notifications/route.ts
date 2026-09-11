@@ -16,37 +16,44 @@ if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
 
 async function sendEmailNotification(toEmail: string, title: string, body: string) {
   const resendApiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.EMAIL_FROM || 'Hydra Hydration <reminders@hydra.app>';
+  // Resend free tier requires 'onboarding@resend.dev' or a verified domain!
+  const fromEmail = process.env.EMAIL_FROM || 'Hydra Hydration <onboarding@resend.dev>';
 
   if (resendApiKey) {
     try {
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
+          'Authorization': `Bearer ${resendApiKey.trim()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           from: fromEmail,
-          to: [toEmail],
+          to: [toEmail.trim()],
           subject: title,
           html: `
-            <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #0f172a; color: #ffffff; border-radius: 12px;">
-              <h2 style="color: #38bdf8; margin-bottom: 10px;">💧 Hydra Hydration Reminder</h2>
-              <p style="font-size: 16px; line-height: 1.5; color: #e2e8f0;">${body}</p>
-              <hr style="border-color: #334155; margin: 20px 0;" />
-              <p style="font-size: 12px; color: #94a3b8;">Sent with 💙 by Hydra App</p>
+            <div style="font-family: Arial, sans-serif; padding: 24px; background-color: #0f172a; color: #ffffff; border-radius: 16px; max-w: 600px;">
+              <h2 style="color: #38bdf8; margin-top: 0; margin-bottom: 12px; font-size: 22px;">💧 Hydra Hydration Reminder</h2>
+              <p style="font-size: 16px; line-height: 1.6; color: #e2e8f0; margin-bottom: 20px;">${body}</p>
+              <div style="background-color: #1e293b; padding: 14px 18px; border-radius: 10px; border: 1px solid #334155;">
+                <p style="font-size: 13px; color: #94a3b8; margin: 0;">Stay healthy and keep hydrated throughout your day!</p>
+              </div>
+              <hr style="border: none; border-top: 1px solid #334155; margin: 24px 0 16px 0;" />
+              <p style="font-size: 11px; color: #64748b; margin: 0;">Sent with 💙 by Hydra App</p>
             </div>
           `
         })
       });
 
+      const resData = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Resend API error: ${errorText}`);
+        const errorMsg = resData.message || resData.name || response.statusText || 'Resend error';
+        console.error('[Resend Error Response]:', resData);
+        return { status: 'failed', error: `Resend API Error (${response.status}): ${errorMsg}` };
       }
 
-      return { status: 'delivered', provider: 'Resend API' };
+      return { status: 'delivered', provider: 'Resend API', id: resData.id };
     } catch (err) {
       console.error('Failed to send email via Resend API:', err);
       return { status: 'failed', error: err instanceof Error ? err.message : 'Resend dispatch failed' };
@@ -54,9 +61,7 @@ async function sendEmailNotification(toEmail: string, title: string, body: strin
   }
 
   // Simulated Email Dispatch (Dev / Offline mode)
-  console.log(`[Hydra Notification System] 📧 EMAIL DISPATCHED to <${toEmail}>`);
-  console.log(`Subject: ${title}`);
-  console.log(`Body: ${body}`);
+  console.log(`[Hydra Notification System] 📧 EMAIL DISPATCHED (Dev Mode) to <${toEmail}>`);
   return { status: 'delivered', provider: 'Simulator (Dev Mode - add RESEND_API_KEY for live delivery)' };
 }
 
@@ -68,10 +73,10 @@ async function sendSMSNotification(toPhone: string, title: string, body: string)
   if (twilioSid && twilioToken && twilioFrom) {
     try {
       const endpoint = `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`;
-      const auth = Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64');
+      const auth = Buffer.from(`${twilioSid.trim()}:${twilioToken.trim()}`).toString('base64');
       const params = new URLSearchParams();
-      params.append('From', twilioFrom);
-      params.append('To', toPhone);
+      params.append('From', twilioFrom.trim());
+      params.append('To', toPhone.trim());
       params.append('Body', `${title}: ${body}`);
 
       const response = await fetch(endpoint, {
@@ -83,12 +88,13 @@ async function sendSMSNotification(toPhone: string, title: string, body: string)
         body: params.toString()
       });
 
+      const resData = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        const errJson = await response.json();
-        throw new Error(errJson.message || 'Twilio SMS dispatch failed');
+        return { status: 'failed', error: resData.message || 'Twilio SMS failed' };
       }
 
-      return { status: 'delivered', provider: 'Twilio SMS' };
+      return { status: 'delivered', provider: 'Twilio SMS', sid: resData.sid };
     } catch (err) {
       console.error('Failed to send SMS via Twilio API:', err);
       return { status: 'failed', error: err instanceof Error ? err.message : 'Twilio SMS dispatch failed' };
@@ -96,8 +102,7 @@ async function sendSMSNotification(toPhone: string, title: string, body: string)
   }
 
   // Simulated SMS Dispatch (Dev / Offline mode)
-  console.log(`[Hydra Notification System] 📱 SMS DISPATCHED to <${toPhone}>`);
-  console.log(`Message: ${title} - ${body}`);
+  console.log(`[Hydra Notification System] 📱 SMS DISPATCHED (Dev Mode) to <${toPhone}>`);
   return { status: 'delivered', provider: 'Simulator (Dev Mode - add TWILIO_* keys for live SMS)' };
 }
 
@@ -109,20 +114,20 @@ export async function POST(req: NextRequest) {
     const title = payload?.title || 'Hydra Hydration Check! 💧';
     const message = payload?.body || 'Time for a glass of water!';
 
-    const results: Record<string, unknown> = {};
+    const results: Record<string, { status: string; provider?: string; error?: string }> = {};
 
     // 1. Email Channel
-    if ((channel === 'email' || channel === 'all') && email) {
+    if ((channel === 'email' || channel === 'all' || action === 'test') && email) {
       results.email = await sendEmailNotification(email, title, message);
     }
 
     // 2. Phone / SMS Channel
-    if ((channel === 'phone' || channel === 'all') && phone) {
+    if ((channel === 'phone' || channel === 'all' || action === 'test') && phone) {
       results.phone = await sendSMSNotification(phone, title, message);
     }
 
     // 3. Web Push Channel
-    if ((channel === 'push' || channel === 'all') && subscription) {
+    if ((channel === 'push' || channel === 'all' || action === 'test') && subscription) {
       if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
         try {
           await webPush.sendNotification(subscription, JSON.stringify({ title, body: message }));
