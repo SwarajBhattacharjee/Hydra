@@ -31,9 +31,15 @@ export default function SettingsPage() {
     // 1. Auto-save current profile settings first
     HydrationStore.saveProfile(profile);
 
-    if (!profile.email && !profile.phone && profile.notificationChannel !== 'push') {
-      alert("Please enter your Email address or Phone number below first!");
-      return;
+    // Prompt permission if not requested yet
+    const caps = detectPlatformCapabilities();
+    if (caps.permissionState !== 'granted') {
+      const perm = await requestNotificationPermission();
+      if (perm === 'granted') {
+        const p = { ...profile, notificationsEnabled: true };
+        HydrationStore.saveProfile(p);
+        setProfile(p);
+      }
     }
 
     setTestSent(true);
@@ -42,11 +48,13 @@ export default function SettingsPage() {
     const title = 'Hydra Hydration Check! 💧';
     const body = `Hey ${profile.name}! Time for a glass of water. ${profile.friendName ? `(${profile.friendName} is watching)` : ''}`;
 
-    // Also trigger local browser push notification if permission is granted
-    const caps = detectPlatformCapabilities();
-    if (caps.permissionState === 'granted') {
-      sendLocalNotification(title, { body, tag: 'test-reminder' });
-    }
+    // Trigger local browser notification and in-app toast
+    sendLocalNotification(title, { body, tag: 'test-reminder' });
+
+    let subscription = null;
+    try {
+      subscription = JSON.parse(localStorage.getItem('hydra_push_subscription') || 'null');
+    } catch {}
 
     try {
       const res = await fetch('/api/notifications', {
@@ -57,6 +65,7 @@ export default function SettingsPage() {
           channel: profile.notificationChannel || 'all',
           email: profile.email,
           phone: profile.phone,
+          subscription,
           payload: { title, body }
         })
       });

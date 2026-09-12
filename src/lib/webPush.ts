@@ -68,6 +68,10 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   }
   try {
     const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      // Auto subscribe browser to Web Push
+      await subscribeUserToPush();
+    }
     return permission;
   } catch (err) {
     console.error('Failed to request notification permission:', err);
@@ -75,25 +79,85 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   }
 }
 
+export async function subscribeUserToPush(): Promise<PushSubscription | null> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return null;
+  }
+
+  try {
+    const reg = await registerServiceWorker();
+    if (!reg) return null;
+
+    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BLF7WgxDdnmFX5VGmtjp1a_4Oom1YbbMgmy_wbneMI_sGZnKtWXtRWsrfias4ibfgKAPrrSCcAcVPPc9kSOzUeg';
+
+    let subscription = await reg.pushManager.getSubscription();
+    if (!subscription) {
+      const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
+      subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedKey
+      });
+    }
+
+    if (subscription) {
+      localStorage.setItem('hydra_push_subscription', JSON.stringify(subscription));
+
+      // Sync subscription to backend API
+      fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'subscribe',
+          subscription
+        })
+      }).catch((e) => console.warn('Push subscription backend sync warning:', e));
+    }
+
+    return subscription;
+  } catch (err) {
+    console.warn('Web Push subscription failed:', err);
+    return null;
+  }
+}
+
 export async function sendLocalNotification(title: string, options: NotificationOptions): Promise<boolean> {
-  if (typeof window === 'undefined' || Notification.permission !== 'granted') {
+  if (typeof window === 'undefined') return false;
+
+  // Always emit in-app toast event for active tab
+  window.dispatchEvent(new CustomEvent('HYDRA_INAPP_NOTIFICATION', {
+    detail: { title, body: options.body || '' }
+  }));
+
+  if (Notification.permission !== 'granted') {
     return false;
   }
 
-  if ('serviceWorker' in navigator) {
-    const reg = await navigator.serviceWorker.ready;
-    if (reg) {
-      await reg.showNotification(title, {
-        badge: '/icons/icon-192.png',
-        icon: '/icons/icon-192.png',
-        ...({ vibrate: [100, 50, 100] } as Record<string, unknown>),
-        ...options
-      } as NotificationOptions);
-      return true;
+  let shown = false;
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      if (reg) {
+        await reg.showNotification(title, {
+          badge: '/icons/icon-192.png',
+          icon: '/icons/icon-192.png',
+          ...({ vibrate: [100, 50, 100] } as Record<string, unknown>),
+          ...options
+        } as NotificationOptions);
+        shown = true;
+      }
+    }
+  } catch (err) {
+    console.warn('SW showNotification fallback:', err);
+  }
+
+  if (!shown) {
+    try {
+      new Notification(title, options);
+      shown = true;
+    } catch (e) {
+      console.warn('Direct Notification fallback warning:', e);
     }
   }
 
-  // Fallback to direct Notification instance
-  new Notification(title, options);
-  return true;
+  return shown;
 }
